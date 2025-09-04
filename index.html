@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zombie Rush</title>
+    <title>Zombie Survival</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -315,6 +315,7 @@
         let lastFlamethrowerAmmoUse = 0;
         let lastMinigunAmmoUse = 0;
         let lastAssaultRifleAmmoUse = 0;
+        let lastRapidFireAmmoUse = 0;
         let lastChainsawDmgTime = 0;
         let isPaused = false;
         let debugUnlocked = false;
@@ -334,7 +335,7 @@
         const FIRE_DAMAGE = 10;
         const FIRE_DURATION = 3000;
         const FIRE_TICK_RATE = 250;
-        const DEBUG_CODE = "Superidol12345@!3";
+        const DEBUG_CODE = "gubed";
 
         const WEAPONS = {
             pistol: { name: 'Pistol', type: 'gun', damage: 25, cooldown: 200, spread: 0.05 },
@@ -344,12 +345,14 @@
             railgun: { name: 'Railgun', type: 'gun', damage: 300, cooldown: 1000, spread: 0, piercing: true },
             minigun: { name: 'Minigun', type: 'gun', damage: 15, cooldown: 50, spread: 0.3 },
             grenade_launcher: { name: 'Grenade Launcher', type: 'gun', damage: 150, cooldown: 2000, spread: 0.1 },
+            rocket_launcher: { name: 'Rocket Launcher', type: 'gun', damage: 300, cooldown: 3000, spread: 0 },
             knife: { name: 'Knife', type: 'melee', damage: 40, cooldown: 400, range: 40, knockback: 0 },
             baseball_bat: { name: 'Baseball Bat', type: 'melee', damage: 25, cooldown: 600, range: 60, knockback: 15 },
             katana: { name: 'Katana', type: 'melee', damage: 50, cooldown: 300, range: 50, knockback: 5 },
             sledgehammer: { name: 'Sledgehammer', type: 'melee', damage: 120, cooldown: 800, range: 70, knockback: 25 },
             fire_axe: { name: 'Fire Axe', type: 'melee', damage: 85, cooldown: 650, range: 65, knockback: 10 },
-            chainsaw: { name: 'Chainsaw', type: 'melee', damage: 20, cooldown: 100, range: 50, knockback: 2 }
+            chainsaw: { name: 'Chainsaw', type: 'melee', damage: 20, cooldown: 100, range: 50, knockback: 2 },
+            energy_sword: { name: 'Energy Sword', type: 'melee', damage: 150, cooldown: 500, range: 80, knockback: 10 }
         };
 
         const POWERUP_TYPES = [
@@ -445,7 +448,7 @@
                     const animDuration = (melee.cooldown * this.buffs.meleeCooldownMultiplier) * 0.5;
                     const elapsedTime = Date.now() - this.meleeAnimStartTime;
                     const animProgress = Math.min(elapsedTime / animDuration, 1);
-                    const swingArc = (melee.name === 'Katana' || melee.name === 'Sledgehammer' || melee.name === 'Fire Axe') ? Math.PI : Math.PI / 1.5;
+                    const swingArc = (melee.name === 'Katana' || melee.name === 'Sledgehammer' || melee.name === 'Fire Axe' || melee.name === 'Energy Sword') ? Math.PI : Math.PI / 1.5;
                     const swingAngle = Math.sin(animProgress * Math.PI) * swingArc - (swingArc / 2);
                     ctx.save(); ctx.rotate(swingAngle);
                     drawMeleeModel(melee);
@@ -524,6 +527,7 @@
             else if (gun.name === 'Railgun') { ctx.fillStyle = '#1e3a8a'; ctx.fillRect(s - 5, -2.5, 35, 5); }
             else if (gun.name === 'Minigun') { ctx.fillStyle = '#4a5568'; ctx.fillRect(s, -5, 30, 10); ctx.fillRect(s - 10, -3, 10, 6); }
             else if (gun.name === 'Grenade Launcher') { ctx.fillStyle = '#2f855a'; ctx.fillRect(s, -4, 25, 8); ctx.beginPath(); ctx.arc(s, 0, 8, 0, Math.PI*2); ctx.fill(); }
+            else if (gun.name === 'Rocket Launcher') { ctx.fillStyle = '#7f1d1d'; ctx.fillRect(s, -5, 35, 10); ctx.fillRect(s+35, -2.5, 5, 5); }
         }
 
         function drawMeleeModel(melee) {
@@ -534,6 +538,7 @@
             else if (melee.name === 'Sledgehammer') { ctx.fillStyle = '#718096'; ctx.fillRect(s, -8, 20, 16); ctx.fillStyle = '#713f12'; ctx.fillRect(s - 20, -2, 20, 4); }
             else if (melee.name === 'Fire Axe') { ctx.fillStyle = '#e53e3e'; ctx.beginPath(); ctx.moveTo(s+10, -15); ctx.lineTo(s+25, -10); ctx.lineTo(s+25, 10); ctx.lineTo(s+10, 15); ctx.arc(s+10, 0, 15, Math.PI/2, -Math.PI/2, false); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#713f12'; ctx.fillRect(s - 25, -2, 35, 4); }
             else if (melee.name === 'Chainsaw') { ctx.fillStyle = '#f6e05e'; ctx.fillRect(s, -5, 40, 10); ctx.fillStyle = '#718096'; ctx.fillRect(s - 15, -8, 15, 16); }
+            else if (melee.name === 'Energy Sword') { ctx.fillStyle = '#81e6d9'; ctx.beginPath(); ctx.moveTo(s, -2.5); ctx.lineTo(s + 50, 0); ctx.lineTo(s, 2.5); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 10; ctx.shadowColor = '#81e6d9'; }
         }
 
         class Zombie {
@@ -548,6 +553,13 @@
             }
 
             draw() {
+                if (this.isOnFire) {
+                    ctx.strokeStyle = '#ef4444';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
                 ctx.fillStyle = this.isFrozen ? '#a5f3fc' : (this.isFast ? '#f59e0b' : '#48bb78');
                 ctx.beginPath(); ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2); ctx.fill();
                 if (this.health < this.maxHealth) {
@@ -594,6 +606,7 @@
                 this.piercing = options.piercing || false;
                 this.pierceCount = options.pierceCount || 1;
                 this.isGrenade = options.isGrenade || false;
+                this.isRocket = options.isRocket || false;
                 this.grenadeFuse = 1000;
                 this.spawnTime = Date.now();
                 this.lifetime = 2000;
@@ -603,7 +616,13 @@
                 if (this.isGrenade) {
                     ctx.fillStyle = '#556b2f'; // Dark Olive Green
                     ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2); ctx.fill();
-                } else {
+                } else if (this.isRocket) {
+                    ctx.fillStyle = '#a0aec0';
+                    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+                    ctx.fillRect(-10, -3, 20, 6);
+                    ctx.restore();
+                }
+                else {
                     ctx.fillStyle = this.piercing ? '#60a5fa' : '#f6e05e';
                     if (this.piercing) {
                         ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
@@ -614,9 +633,12 @@
                 }
             }
             update() {
-                const speed = (this.piercing || this.isGrenade) ? BULLET_SPEED * 1.5 : BULLET_SPEED;
+                const speed = (this.piercing || this.isGrenade || this.isRocket) ? BULLET_SPEED * 1.5 : BULLET_SPEED;
                 this.x += Math.cos(this.angle) * speed;
                 this.y += Math.sin(this.angle) * speed;
+                if (this.isRocket) {
+                     particles.push(new Particle(this.x, this.y, '#f97316', {x:0, y:0}, 3, 0.5));
+                }
                 this.draw();
             }
         }
@@ -690,6 +712,8 @@
                     else if (this.data.name === 'Grenade Launcher') symbol = 'GL';
                     else if (this.data.name === 'Fire Axe') symbol = 'AX';
                     else if (this.data.name === 'Chainsaw') symbol = 'CS';
+                    else if (this.data.name === 'Rocket Launcher') symbol = 'RL';
+                    else if (this.data.name === 'Energy Sword') symbol = 'ES';
                     else symbol = 'B';
                 }
                 ctx.fillText(symbol, this.x, this.y);
@@ -744,7 +768,8 @@
                 { wave: 12, key: 'katana' }, { wave: 15, key: 'railgun' },
                 { wave: 18, key: 'sledgehammer' }, { wave: 20, key: 'grenade_launcher' },
                 { wave: 22, key: 'fire_axe' }, { wave: 25, key: 'minigun' },
-                { wave: 28, key: 'chainsaw' }
+                { wave: 28, key: 'chainsaw' }, { wave: 30, key: 'rocket_launcher'},
+                { wave: 32, key: 'energy_sword'}
             ];
 
             weaponsToSpawn.forEach(w => {
@@ -820,13 +845,17 @@
             const now = Date.now();
             const weapon = WEAPONS[player.currentGun];
             let currentCooldown = weapon.cooldown * player.buffs.cooldownMultiplier;
-            if (player.activePowerUps['Rapid Fire']) currentCooldown /= 2;
+            
+            // Rapid Fire power-up overrides normal cooldown for shooting, but not ammo consumption logic
+            if (!player.activePowerUps['Rapid Fire']) {
+                 if (player.activePowerUps['Rapid Fire']) currentCooldown /= 2;
+            }
 
             if (player.ammo > 0 && now - lastShotTime > currentCooldown) {
                 lastShotTime = now;
                 let damage = (player.activePowerUps['Insta-Kill'] ? 10000 : weapon.damage) * player.buffs.damageMultiplier;
 
-                if (weapon.name !== 'Flamethrower' && weapon.name !== 'Minigun' && weapon.name !== 'Assault Rifle') {
+                if (!player.activePowerUps['Rapid Fire'] && weapon.name !== 'Flamethrower' && weapon.name !== 'Minigun' && weapon.name !== 'Assault Rifle') {
                     player.ammo--;
                 }
 
@@ -838,6 +867,9 @@
                 } else if (weapon.name === 'Grenade Launcher') {
                     const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
                     bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {isGrenade: true}));
+                } else if (weapon.name === 'Rocket Launcher') {
+                    const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+                    bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {isRocket: true}));
                 }
                 else if (weapon.name !== 'Flamethrower'){
                     const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
@@ -1004,7 +1036,14 @@
             ctx.translate(-camera.x, -camera.y);
 
             if (mouse.down) {
-                if (player.currentGun === 'flamethrower' && player.ammo > 0) {
+                if (player.activePowerUps['Rapid Fire'] && player.ammo > 0) {
+                     if (now - lastRapidFireAmmoUse > 1000 / 3) { // 3 ammo per second
+                        player.ammo--;
+                        lastRapidFireAmmoUse = now;
+                        updateUI();
+                    }
+                }
+                else if (player.currentGun === 'flamethrower' && player.ammo > 0) {
                     if (now - lastFlamethrowerAmmoUse > 500) {
                         player.ammo--;
                         lastFlamethrowerAmmoUse = now;
@@ -1075,9 +1114,12 @@
 
             bullets.forEach((bullet, bIndex) => {
                 bullet.update();
-                if (now - bullet.spawnTime > bullet.lifetime || (bullet.isGrenade && now - bullet.spawnTime > bullet.grenadeFuse)) {
+                const bulletLifetime = (bullet.isGrenade || bullet.isRocket) ? bullet.grenadeFuse : bullet.lifetime;
+                if (now - bullet.spawnTime > bulletLifetime) {
                     if (bullet.isGrenade) {
                         explosions.push(new Explosion(bullet.x, bullet.y, 80, bullet.damage));
+                    } else if (bullet.isRocket) {
+                        explosions.push(new Explosion(bullet.x, bullet.y, 150, bullet.damage));
                     }
                     bullets.splice(bIndex, 1);
                 }
@@ -1106,7 +1148,11 @@
                         if (bullet.isGrenade) {
                             explosions.push(new Explosion(bullet.x, bullet.y, 80, bullet.damage));
                             bullets.splice(bIndex, 1);
-                        } else if (!bullet.hitZombies.includes(zombie)) {
+                        } else if (bullet.isRocket) {
+                            explosions.push(new Explosion(bullet.x, bullet.y, 150, bullet.damage));
+                            bullets.splice(bIndex, 1);
+                        }
+                        else if (!bullet.hitZombies.includes(zombie)) {
                              zombie.health -= bullet.damage;
                              bullet.hitZombies.push(zombie);
                              if (bullet.hitZombies.length >= bullet.pierceCount) {
