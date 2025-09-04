@@ -346,13 +346,15 @@
             minigun: { name: 'Minigun', type: 'gun', damage: 15, cooldown: 50, spread: 0.3 },
             grenade_launcher: { name: 'Grenade Launcher', type: 'gun', damage: 150, cooldown: 2000, spread: 0.1 },
             rocket_launcher: { name: 'Rocket Launcher', type: 'gun', damage: 300, cooldown: 3000, spread: 0 },
+            bfg: { name: 'BFG', type: 'gun', damage: 500, cooldown: 5000, spread: 0},
             knife: { name: 'Knife', type: 'melee', damage: 40, cooldown: 400, range: 40, knockback: 0 },
             baseball_bat: { name: 'Baseball Bat', type: 'melee', damage: 25, cooldown: 600, range: 60, knockback: 15 },
             katana: { name: 'Katana', type: 'melee', damage: 50, cooldown: 300, range: 50, knockback: 5 },
             sledgehammer: { name: 'Sledgehammer', type: 'melee', damage: 120, cooldown: 800, range: 70, knockback: 25 },
             fire_axe: { name: 'Fire Axe', type: 'melee', damage: 85, cooldown: 650, range: 65, knockback: 10 },
             chainsaw: { name: 'Chainsaw', type: 'melee', damage: 20, cooldown: 100, range: 50, knockback: 2 },
-            energy_sword: { name: 'Energy Sword', type: 'melee', damage: 150, cooldown: 500, range: 80, knockback: 10 }
+            energy_sword: { name: 'Energy Sword', type: 'melee', damage: 150, cooldown: 500, range: 80, knockback: 10 },
+            thunder_hammer: { name: 'Thunder Hammer', type: 'melee', damage: 200, cooldown: 1200, range: 75, knockback: 30}
         };
 
         const POWERUP_TYPES = [
@@ -528,6 +530,7 @@
             else if (gun.name === 'Minigun') { ctx.fillStyle = '#4a5568'; ctx.fillRect(s, -5, 30, 10); ctx.fillRect(s - 10, -3, 10, 6); }
             else if (gun.name === 'Grenade Launcher') { ctx.fillStyle = '#2f855a'; ctx.fillRect(s, -4, 25, 8); ctx.beginPath(); ctx.arc(s, 0, 8, 0, Math.PI*2); ctx.fill(); }
             else if (gun.name === 'Rocket Launcher') { ctx.fillStyle = '#7f1d1d'; ctx.fillRect(s, -5, 35, 10); ctx.fillRect(s+35, -2.5, 5, 5); }
+            else if (gun.name === 'BFG') { ctx.fillStyle = '#065f46'; ctx.beginPath(); ctx.arc(s, 0, 15, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#6ee7b7'; ctx.beginPath(); ctx.arc(s, 0, 5, 0, Math.PI*2); ctx.fill(); }
         }
 
         function drawMeleeModel(melee) {
@@ -539,6 +542,7 @@
             else if (melee.name === 'Fire Axe') { ctx.fillStyle = '#e53e3e'; ctx.beginPath(); ctx.moveTo(s+10, -15); ctx.lineTo(s+25, -10); ctx.lineTo(s+25, 10); ctx.lineTo(s+10, 15); ctx.arc(s+10, 0, 15, Math.PI/2, -Math.PI/2, false); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#713f12'; ctx.fillRect(s - 25, -2, 35, 4); }
             else if (melee.name === 'Chainsaw') { ctx.fillStyle = '#f6e05e'; ctx.fillRect(s, -5, 40, 10); ctx.fillStyle = '#718096'; ctx.fillRect(s - 15, -8, 15, 16); }
             else if (melee.name === 'Energy Sword') { ctx.fillStyle = '#81e6d9'; ctx.beginPath(); ctx.moveTo(s, -2.5); ctx.lineTo(s + 50, 0); ctx.lineTo(s, 2.5); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 10; ctx.shadowColor = '#81e6d9'; }
+            else if (melee.name === 'Thunder Hammer') { ctx.fillStyle = '#a0aec0'; ctx.fillRect(s, -12, 30, 24); ctx.fillStyle = '#f6e05e'; ctx.fillRect(s-25, -3, 25, 6);}
         }
 
         class Zombie {
@@ -607,6 +611,7 @@
                 this.pierceCount = options.pierceCount || 1;
                 this.isGrenade = options.isGrenade || false;
                 this.isRocket = options.isRocket || false;
+                this.isBFG = options.isBFG || false;
                 this.grenadeFuse = 1000;
                 this.spawnTime = Date.now();
                 this.lifetime = 2000;
@@ -622,6 +627,11 @@
                     ctx.fillRect(-10, -3, 20, 6);
                     ctx.restore();
                 }
+                else if (this.isBFG) {
+                    ctx.fillStyle = '#6ee7b7';
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 4, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 15; ctx.shadowColor = '#6ee7b7';
+                }
                 else {
                     ctx.fillStyle = this.piercing ? '#60a5fa' : '#f6e05e';
                     if (this.piercing) {
@@ -633,11 +643,39 @@
                 }
             }
             update() {
-                const speed = (this.piercing || this.isGrenade || this.isRocket) ? BULLET_SPEED * 1.5 : BULLET_SPEED;
+                let speed = (this.piercing || this.isGrenade || this.isRocket || this.isBFG) ? BULLET_SPEED : BULLET_SPEED;
+                if (this.isBFG) speed /= 2;
+
                 this.x += Math.cos(this.angle) * speed;
                 this.y += Math.sin(this.angle) * speed;
                 if (this.isRocket) {
                      particles.push(new Particle(this.x, this.y, '#f97316', {x:0, y:0}, 3, 0.5));
+                }
+                if (this.isBFG) {
+                    zombies.forEach(zombie => {
+                        if (getDistance(this.x, this.y, zombie.x, zombie.y) < 100) {
+                            zombie.health -= 5 * player.buffs.damageMultiplier; // Zap damage
+                            const zap = {
+                                x1: this.x, y1: this.y, x2: zombie.x, y2: zombie.y, alpha: 1,
+                                draw: function() {
+                                    ctx.save();
+                                    ctx.globalAlpha = this.alpha;
+                                    ctx.strokeStyle = '#6ee7b7';
+                                    ctx.lineWidth = 2;
+                                    ctx.beginPath();
+                                    ctx.moveTo(this.x1, this.y1);
+                                    ctx.lineTo(this.x2, this.y2);
+                                    ctx.stroke();
+                                    ctx.restore();
+                                },
+                                update: function() {
+                                    this.alpha -= 0.1;
+                                    this.draw();
+                                }
+                            };
+                            particles.push(zap);
+                        }
+                    });
                 }
                 this.draw();
             }
@@ -714,6 +752,8 @@
                     else if (this.data.name === 'Chainsaw') symbol = 'CS';
                     else if (this.data.name === 'Rocket Launcher') symbol = 'RL';
                     else if (this.data.name === 'Energy Sword') symbol = 'ES';
+                    else if (this.data.name === 'BFG') symbol = 'BFG';
+                    else if (this.data.name === 'Thunder Hammer') symbol = 'TH';
                     else symbol = 'B';
                 }
                 ctx.fillText(symbol, this.x, this.y);
@@ -769,7 +809,8 @@
                 { wave: 18, key: 'sledgehammer' }, { wave: 20, key: 'grenade_launcher' },
                 { wave: 22, key: 'fire_axe' }, { wave: 25, key: 'minigun' },
                 { wave: 28, key: 'chainsaw' }, { wave: 30, key: 'rocket_launcher'},
-                { wave: 32, key: 'energy_sword'}
+                { wave: 32, key: 'energy_sword'}, { wave: 35, key: 'bfg'},
+                { wave: 38, key: 'thunder_hammer'}
             ];
 
             weaponsToSpawn.forEach(w => {
@@ -846,10 +887,7 @@
             const weapon = WEAPONS[player.currentGun];
             let currentCooldown = weapon.cooldown * player.buffs.cooldownMultiplier;
             
-            // Rapid Fire power-up overrides normal cooldown for shooting, but not ammo consumption logic
-            if (!player.activePowerUps['Rapid Fire']) {
-                 if (player.activePowerUps['Rapid Fire']) currentCooldown /= 2;
-            }
+            if (player.activePowerUps['Rapid Fire']) currentCooldown /= 2;
 
             if (player.ammo > 0 && now - lastShotTime > currentCooldown) {
                 lastShotTime = now;
@@ -870,6 +908,9 @@
                 } else if (weapon.name === 'Rocket Launcher') {
                     const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
                     bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {isRocket: true}));
+                } else if (weapon.name === 'BFG') {
+                    const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+                    bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {isBFG: true}));
                 }
                 else if (weapon.name !== 'Flamethrower'){
                     const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
@@ -878,11 +919,13 @@
                 }
                 
                 player.recoilAmount = 5;
-                const barrelOffsetX = Math.cos(player.angle) * (player.size / 2 + 10);
-                const barrelOffsetY = Math.sin(player.angle) * (player.size / 2 + 10);
-                const flash = new Particle(player.x + barrelOffsetX, player.y + barrelOffsetY, '#fef08a', {x:0, y:0}, 8, 0.2);
-                flash.update = function() { this.alpha -= 0.05; this.draw(); };
-                particles.push(flash);
+                if (weapon.name !== 'Flamethrower' && weapon.name !== 'Rocket Launcher') {
+                    const barrelOffsetX = Math.cos(player.angle) * (player.size / 2 + 10);
+                    const barrelOffsetY = Math.sin(player.angle) * (player.size / 2 + 10);
+                    const flash = new Particle(player.x + barrelOffsetX, player.y + barrelOffsetY, '#fef08a', {x:0, y:0}, 8, 0.2);
+                    flash.update = function() { this.alpha -= 0.05; this.draw(); };
+                    particles.push(flash);
+                }
                 updateUI();
             }
             // Flamethrower continuous fire
@@ -931,6 +974,29 @@
 
             if (now - lastMeleeTime < (weapon.cooldown * player.buffs.meleeCooldownMultiplier)) return;
             lastMeleeTime = now;
+
+             if (weapon.name === 'Thunder Hammer') {
+                explosions.push(new Explosion(player.x, player.y, 80, weapon.damage / 2));
+                const shockwave = {
+                    x: player.x, y: player.y, radius: 0, maxRadius: 80, alpha: 1,
+                    draw: function() {
+                        ctx.save();
+                        ctx.globalAlpha = this.alpha;
+                        ctx.strokeStyle = '#f6e05e';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+                        ctx.stroke();
+                        ctx.restore();
+                    },
+                    update: function() {
+                        this.radius += 5;
+                        this.alpha -= 0.05;
+                        this.draw();
+                    }
+                };
+                particles.push(shockwave);
+            }
             
             const damage = (player.activePowerUps['Insta-Kill'] ? 10000 : weapon.damage) * player.buffs.damageMultiplier;
 
@@ -1114,12 +1180,14 @@
 
             bullets.forEach((bullet, bIndex) => {
                 bullet.update();
-                const bulletLifetime = (bullet.isGrenade || bullet.isRocket) ? bullet.grenadeFuse : bullet.lifetime;
+                const bulletLifetime = (bullet.isGrenade || bullet.isRocket || bullet.isBFG) ? bullet.grenadeFuse : bullet.lifetime;
                 if (now - bullet.spawnTime > bulletLifetime) {
                     if (bullet.isGrenade) {
                         explosions.push(new Explosion(bullet.x, bullet.y, 80, bullet.damage));
                     } else if (bullet.isRocket) {
                         explosions.push(new Explosion(bullet.x, bullet.y, 150, bullet.damage));
+                    } else if (bullet.isBFG) {
+                        explosions.push(new Explosion(bullet.x, bullet.y, 200, bullet.damage));
                     }
                     bullets.splice(bIndex, 1);
                 }
@@ -1151,6 +1219,9 @@
                         } else if (bullet.isRocket) {
                             explosions.push(new Explosion(bullet.x, bullet.y, 150, bullet.damage));
                             bullets.splice(bIndex, 1);
+                        } else if (bullet.isBFG) {
+                             explosions.push(new Explosion(bullet.x, bullet.y, 200, bullet.damage));
+                             bullets.splice(bIndex, 1);
                         }
                         else if (!bullet.hitZombies.includes(zombie)) {
                              zombie.health -= bullet.damage;
