@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zombie Rush</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none; /* Prevent text highlighting */
+            -webkit-user-select: none; /* For Safari */
+        }
+        .font-creepster {
+            font-family: 'Creepster', cursive;
+        }
+        #gameCanvas {
+            background-color: #4a5568; /* slate-700 */
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .hud-icon {
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+        }
+        #modal-container, #debug-prompt-container, #wave-complete-container, #weapon-swap-container {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        #hud, #weapon-hud {
+            pointer-events: none;
+        }
+        .selected-weapon {
+            background-color: rgba(250, 204, 21, 0.4); /* yellow-400 with opacity */
+            padding: 0 4px;
+            border-radius: 4px;
+        }
+        #debugMenu {
+            background-color: rgba(26, 32, 44, 0.95); /* gray-900 with opacity */
+            color: #E2E8F0; /* slate-200 */
+            pointer-events: auto;
+        }
+        #debugMenu input, #debugCodeInput {
+            background-color: #4A5568; /* slate-700 */
+            color: #E2E8F0; /* slate-200 */
+            border: 1px solid #718096; /* slate-500 */
+            padding: 4px;
+            border-radius: 4px;
+            user-select: text; /* Allow text selection in inputs */
+            -webkit-user-select: text;
+        }
+        #debugMenu input {
+             width: 80px;
+        }
+        #debugMenu button, #submitDebugCodeBtn, #startScreen button, .buff-card, .weapon-card {
+            background-color: #4299E1; /* blue-500 */
+            transition: background-color 0.2s;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 16px;
+            color: white;
+            font-weight: bold;
+        }
+        #debugMenu button:hover, #submitDebugCodeBtn:hover, #startScreen button:hover, .buff-card:hover, .weapon-card:hover {
+            background-color: #2B6CB0; /* blue-700 */
+        }
+        #startButton, #restartButton, #restartRunBtn, #discardWeaponBtn {
+            background-color: #E53E3E !important; /* red-600 */
+        }
+        #startButton:hover, #restartButton:hover, #restartRunBtn:hover, #discardWeaponBtn:hover {
+            background-color: #C53030 !important; /* red-700 */
+        }
+        #debugMenu .remove-btn {
+            background-color: #E53E3E; /* red-600 */
+        }
+        #debugMenu .remove-btn:hover {
+            background-color: #C53030; /* red-700 */
+        }
+        .new-weapon-card {
+            border: 2px solid #facc15; /* yellow-400 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen m-0 p-0">
+
+    <div class="relative w-full h-full max-w-screen-lg max-h-screen-md aspect-video shadow-2xl shadow-red-900/50">
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Heads-Up Display (HUD) -->
+        <div id="hud" class="absolute top-0 left-0 right-0 p-4 flex justify-between items-start select-none hidden">
+            <!-- Left Side: Health & Weapons -->
+            <div class="flex flex-col space-y-2">
+                <!-- Health -->
+                <div class="flex items-center bg-black/50 p-2 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500 mr-2 hud-icon"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>
+                    <div class="w-32 bg-gray-700 rounded-full h-4">
+                        <div id="healthBar" class="bg-red-500 h-4 rounded-full transition-all duration-300"></div>
+                    </div>
+                    <span id="healthText" class="ml-2 font-bold text-sm">100</span>
+                </div>
+                <!-- Weapon Display -->
+                <div id="weapon-hud" class="bg-black/50 p-2 rounded-lg text-sm space-y-1">
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-gray-400">Guns:</span>
+                        <div id="gunList" class="flex items-center space-x-2"></div>
+                    </div>
+                     <div class="flex items-center space-x-2">
+                        <span class="font-bold text-gray-400">Melee:</span>
+                        <div id="meleeList" class="flex items-center space-x-2"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 pt-1">Press 1/2 to switch</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right side container for score and debug button -->
+        <div class="absolute top-4 right-4 flex flex-col items-end space-y-2" style="pointer-events: none;">
+            <!-- Right Side: Wave, Score, Ammo -->
+            <div class="flex items-center space-x-6 bg-black/50 p-2 rounded-lg">
+                <div>
+                    <span class="text-xs text-gray-400">WAVE</span>
+                    <span id="waveText" class="font-bold text-lg ml-1">1</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400">SCORE</span>
+                    <span id="scoreText" class="font-bold text-lg ml-1">0</span>
+                </div>
+                <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-yellow-400 mr-2 hud-icon"><path d="m3 11 18-5v10L3 11z"></path><path d="m21 16-7-3"></path></svg>
+                    <span id="ammoText" class="font-bold text-lg">12</span>
+                </div>
+            </div>
+            <!-- Debug Button -->
+            <button id="debugButton" class="bg-black/50 p-2 rounded-full text-white font-bold text-lg leading-none w-8 h-8 flex items-center justify-center hover:bg-black/75 transition-colors" style="pointer-events: auto;">?</button>
+        </div>
+
+        <!-- Pause Button -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2">
+             <button id="pauseButton" class="bg-black/50 p-2 rounded-full text-white hover:bg-black/75 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+             </button>
+        </div>
+
+        <!-- Modal Container for Start/End/Pause Screens -->
+        <div id="modal-container" class="absolute inset-0 flex items-center justify-center">
+            <div id="startScreen" class="text-center p-8">
+                <h1 id="screenTitle" class="font-creepster text-8xl text-red-600" style="text-shadow: 2px 2px 4px #000;">ZOMBIE RUSH</h1>
+                <p id="screenSubtitle" class="text-gray-300 mt-2 mb-6">WASD: Move | Mouse: Aim | LMB: Shoot | Space: Melee | 1/2: Switch Weapons</p>
+                <div id="buttonContainer" class="flex justify-center space-x-4">
+                    <button id="startButton" style="pointer-events: auto;">Start Game</button>
+                    <button id="unpauseBtn" style="pointer-events: auto;" class="hidden">Unpause</button>
+                    <button id="restartRunBtn" style="pointer-events: auto;" class="hidden">Restart Run</button>
+                </div>
+            </div>
+            <div id="gameOverScreen" class="text-center p-8 hidden">
+                <h1 class="font-creepster text-8xl text-red-600" style="text-shadow: 2px 2px 4px #000;">GAME OVER</h1>
+                <p class="text-2xl mt-4">You survived <span id="finalWave" class="font-bold">0</span> waves.</p>
+                <p class="text-2xl mb-6">Final Score: <span id="finalScore" class="font-bold">0</span></p>
+                <button id="restartButton" style="pointer-events: auto;">Play Again</button>
+            </div>
+        </div>
+
+        <!-- Wave Complete / Buff Selection Screen -->
+        <div id="wave-complete-container" class="absolute inset-0 flex-col items-center justify-center hidden">
+            <div class="text-center p-8">
+                <h2 class="font-creepster text-7xl text-green-400" style="text-shadow: 2px 2px 4px #000;">WAVE COMPLETE</h2>
+                <p class="text-xl text-gray-200 mb-6">Choose an upgrade to continue:</p>
+                <div id="buff-selection" class="flex justify-center items-stretch gap-6">
+                    <!-- Buff cards will be inserted here by JS -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Weapon Swap Screen -->
+        <div id="weapon-swap-container" class="absolute inset-0 flex-col items-center justify-center hidden">
+            <div class="text-center p-8">
+                <h2 class="font-creepster text-7xl text-yellow-400" style="text-shadow: 2px 2px 4px #000;">WEAPON SWAP</h2>
+                <p class="text-xl text-gray-200 mb-2">Inventory full! Replace a weapon or discard the new one.</p>
+                <div class="mb-6">
+                    <p class="text-lg font-bold mb-2">New Weapon:</p>
+                    <div id="new-weapon-card" class="inline-block"></div>
+                </div>
+                <div>
+                    <p class="text-lg font-bold mb-2">Your Current Weapons:</p>
+                    <div id="current-weapon-selection" class="flex justify-center items-stretch gap-6 mb-6">
+                        <!-- Current weapon cards will be inserted here -->
+                    </div>
+                </div>
+                 <button id="discardWeaponBtn">Discard New Weapon</button>
+            </div>
+        </div>
+
+        <!-- Debug Code Prompt -->
+        <div id="debug-prompt-container" class="absolute inset-0 flex-col items-center justify-center hidden">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+                <label for="debugCodeInput" class="block mb-2 font-bold">Enter Debug Code</label>
+                <input type="password" id="debugCodeInput" class="mb-4 text-center">
+                <button id="submitDebugCodeBtn">Unlock</button>
+            </div>
+        </div>
+
+        <!-- Debug Menu -->
+        <div id="debugMenu" class="absolute inset-8 p-6 rounded-lg shadow-lg hidden overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4 border-b border-gray-600 pb-2">Debug Menu <span class="text-sm font-normal text-gray-400">(Press Esc to close)</span></h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Player Stats</h3>
+                    <div class="grid grid-cols-3 gap-4 items-center">
+                        <label for="debugHealth">Health:</label>
+                        <input type="number" id="debugHealth" class="col-span-1">
+                        <button id="setStatsBtn" class="col-span-1 !p-1">Set Stats</button>
+                        <label for="debugAmmo">Ammo:</label>
+                        <input type="number" id="debugAmmo" class="col-span-1">
+                        <span></span>
+                        <label for="debugScore">Score:</label>
+                        <input type="number" id="debugScore" class="col-span-1">
+                        <span></span>
+                    </div>
+                </div>
+                 <div>
+                    <h3 class="text-lg font-semibold mb-2">Wave Control</h3>
+                    <div class="flex items-center gap-4">
+                        <label for="debugWave">Set Wave:</label>
+                        <input type="number" id="debugWave">
+                        <button id="setWaveBtn" class="!p-1">Go</button>
+                        <button id="restartWaveBtn" class="!p-1">Restart Wave</button>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Inventory Limits</h3>
+                     <div class="grid grid-cols-3 gap-4 items-center">
+                        <label for="debugMaxGuns">Max Guns:</label>
+                        <input type="number" id="debugMaxGuns" class="col-span-1">
+                         <button id="setLimitsBtn" class="col-span-1 !p-1">Set Limits</button>
+                        <label for="debugMaxMelee">Max Melee:</label>
+                        <input type="number" id="debugMaxMelee" class="col-span-1">
+                    </div>
+                </div>
+                <div class="lg:col-span-3">
+                    <h3 class="text-lg font-semibold mb-2">Weapons</h3>
+                    <div id="debugWeapons" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2"></div>
+                </div>
+                <div class="lg:col-span-3">
+                    <h3 class="text-lg font-semibold mb-2">Power-ups</h3>
+                     <div class="flex items-center gap-2 mb-2">
+                        <label for="debugPowerupTime">Duration (s):</label>
+                        <input type="number" id="debugPowerupTime" value="10">
+                    </div>
+                    <div id="debugPowerups" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2"></div>
+                </div>
+                 <div class="lg:col-span-3">
+                    <h3 class="text-lg font-semibold mb-2">Permanent Upgrades</h3>
+                    <div id="debugUpgrades" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Canvas and Context Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- DOM Elements ---
+        const hud = document.getElementById('hud');
+        const healthBar = document.getElementById('healthBar');
+        const healthText = document.getElementById('healthText');
+        const waveText = document.getElementById('waveText');
+        const scoreText = document.getElementById('scoreText');
+        const ammoText = document.getElementById('ammoText');
+        const gunList = document.getElementById('gunList');
+        const meleeList = document.getElementById('meleeList');
+        const modalContainer = document.getElementById('modal-container');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const finalWave = document.getElementById('finalWave');
+        const finalScore = document.getElementById('finalScore');
+        const debugButton = document.getElementById('debugButton');
+        const debugMenu = document.getElementById('debugMenu');
+        const debugPromptContainer = document.getElementById('debug-prompt-container');
+        const debugCodeInput = document.getElementById('debugCodeInput');
+        const submitDebugCodeBtn = document.getElementById('submitDebugCodeBtn');
+        const pauseButton = document.getElementById('pauseButton');
+        const unpauseBtn = document.getElementById('unpauseBtn');
+        const restartRunBtn = document.getElementById('restartRunBtn');
+        const screenTitle = document.getElementById('screenTitle');
+        const screenSubtitle = document.getElementById('screenSubtitle');
+        const waveCompleteContainer = document.getElementById('wave-complete-container');
+        const buffSelection = document.getElementById('buff-selection');
+        const weaponSwapContainer = document.getElementById('weapon-swap-container');
+        const newWeaponCard = document.getElementById('new-weapon-card');
+        const currentWeaponSelection = document.getElementById('current-weapon-selection');
+        const discardWeaponBtn = document.getElementById('discardWeaponBtn');
+
+        // --- Game State ---
+        let player, zombies, bullets, particles, pickups, explosions;
+        let keys = {};
+        let mouse = { x: 0, y: 0, down: false, meleeDown: false };
+        let camera = { x: 0, y: 0 };
+        let score = 0;
+        let wave = 0;
+        let isGameOver = false;
+        let gameLoopId;
+        let zombieDamage;
+        let lastShotTime = 0;
+        let lastMeleeTime = 0;
+        let lastDamageTime = 0;
+        let lastRegenTime = 0;
+        let lastFlamethrowerAmmoUse = 0;
+        let lastMinigunAmmoUse = 0;
+        let lastAssaultRifleAmmoUse = 0;
+        let lastChainsawDmgTime = 0;
+        let isPaused = false;
+        let debugUnlocked = false;
+        let maxGunInventory = 3;
+        let maxMeleeInventory = 3;
+        let pendingWeaponPickup = null;
+
+        // --- Game Settings ---
+        const PLAYER_SIZE = 20;
+        const PLAYER_SPEED = 3;
+        const PLAYER_HEALTH = 100;
+        const BULLET_SPEED = 8;
+        const ZOMBIE_SIZE = 22;
+        const REGEN_DELAY = 2000; 
+        const REGEN_RATE = 1000; 
+        const DAMAGE_INVINCIBILITY = 400;
+        const FIRE_DAMAGE = 10;
+        const FIRE_DURATION = 3000;
+        const FIRE_TICK_RATE = 250;
+        const DEBUG_CODE = "Superidol12345@!3";
+
+        const WEAPONS = {
+            pistol: { name: 'Pistol', type: 'gun', damage: 25, cooldown: 200, spread: 0.05 },
+            assault_rifle: { name: 'Assault Rifle', type: 'gun', damage: 25, cooldown: 100, spread: 0.2 },
+            shotgun: { name: 'Shotgun', type: 'gun', damage: 25, cooldown: 500, spread: 0.4, pellets: 6 },
+            flamethrower: { name: 'Flamethrower', type: 'gun', damage: 0, cooldown: 30, spread: 0.3 },
+            railgun: { name: 'Railgun', type: 'gun', damage: 300, cooldown: 1000, spread: 0, piercing: true },
+            minigun: { name: 'Minigun', type: 'gun', damage: 15, cooldown: 50, spread: 0.3 },
+            grenade_launcher: { name: 'Grenade Launcher', type: 'gun', damage: 150, cooldown: 2000, spread: 0.1 },
+            knife: { name: 'Knife', type: 'melee', damage: 40, cooldown: 400, range: 40, knockback: 0 },
+            baseball_bat: { name: 'Baseball Bat', type: 'melee', damage: 25, cooldown: 600, range: 60, knockback: 15 },
+            katana: { name: 'Katana', type: 'melee', damage: 50, cooldown: 300, range: 50, knockback: 5 },
+            sledgehammer: { name: 'Sledgehammer', type: 'melee', damage: 120, cooldown: 800, range: 70, knockback: 25 },
+            fire_axe: { name: 'Fire Axe', type: 'melee', damage: 85, cooldown: 650, range: 65, knockback: 10 },
+            chainsaw: { name: 'Chainsaw', type: 'melee', damage: 20, cooldown: 100, range: 50, knockback: 2 }
+        };
+
+        const POWERUP_TYPES = [
+            { name: 'Health Pack', symbol: '+', color: '#f87171' },
+            { name: 'Speed Boost', symbol: 'S', color: '#60a5fa', duration: 7000 },
+            { name: 'Rapid Fire', symbol: 'R', color: '#facc15', duration: 7000 },
+            { name: 'Insta-Kill', symbol: '💀', color: '#cbd5e1', duration: 10000 },
+            { name: 'Nuke', symbol: '☢️', color: '#4ade80' },
+            { name: 'Freeze', symbol: '❄️', color: '#a5f3fc', duration: 5000 },
+            { name: 'Shield', symbol: '🛡️', color: '#d8b4fe', duration: 10000 }
+        ];
+
+        const PERMANENT_BUFFS = {
+            maxHealth: { name: 'Max Health Up', description: '+20 Max HP', apply: (p) => { p.buffs.maxHealthBonus += 20; p.health += 20; } },
+            damage: { name: 'Damage Up', description: '+10% All Damage', apply: (p) => { p.buffs.damageMultiplier += 0.1; } },
+            moveSpeed: { name: 'Movement Speed', description: '+10% Move Speed', apply: (p) => { p.buffs.speedMultiplier += 0.1; } },
+            reloadSpeed: { name: 'Reload Speed', description: '+10% Fire Rate', apply: (p) => { p.buffs.cooldownMultiplier -= 0.1; } },
+            meleeSpeed: { name: 'Melee Speed', description: '+10% Swing Speed', apply: (p) => { p.buffs.meleeCooldownMultiplier -= 0.1; } },
+            luck: { name: 'Luck Up', description: '+5% Drop Chance', apply: (p) => { p.buffs.luck += 0.05; } },
+            piercing: { name: 'Piercing Shots', description: 'Bullets hit 1 extra zombie', apply: (p) => { p.buffs.piercingBonus += 1; } },
+            regen: { name: 'Improved Regen', description: '+1 HP/sec regeneration', apply: (p) => { p.buffs.regenAmount += 1; } },
+            ammoOnKill: { name: 'Ammo Scavenger', description: '+1 Ammo per melee kill', apply: (p) => { p.buffs.ammoOnMeleeKill += 1; } }
+        };
+
+        // --- Utility Functions ---
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        function getRandom(min, max) { return Math.random() * (max - min) + min; }
+        function getDistance(x1, y1, x2, y2) {
+            const dx = x2 - x1; const dy = y2 - y1;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        // --- Game Object Classes ---
+        class Player {
+            constructor(x, y) {
+                this.x = x; this.y = y; this.size = PLAYER_SIZE;
+                this.baseSpeed = PLAYER_SPEED; this.speed = PLAYER_SPEED;
+                this.health = PLAYER_HEALTH; this.maxHealth = PLAYER_HEALTH;
+                this.ammo = 24; this.angle = 0;
+                this.knockbackVx = 0; this.knockbackVy = 0;
+                this.activePowerUps = {};
+                this.gunInventory = ['pistol'];
+                this.meleeInventory = ['knife'];
+                this.currentGun = 'pistol';
+                this.currentMelee = 'knife';
+                this.lastHitTime = 0;
+                this.isMeleeAttacking = false;
+                this.meleeAnimStartTime = 0;
+                this.recoilAmount = 0;
+                this.buffs = {
+                    maxHealthBonus: 0,
+                    damageMultiplier: 1,
+                    speedMultiplier: 1,
+                    cooldownMultiplier: 1,
+                    meleeCooldownMultiplier: 1,
+                    luck: 0,
+                    piercingBonus: 0,
+                    regenAmount: 1,
+                    ammoOnMeleeKill: 2
+                };
+                this.ignoredPickup = null;
+                this.ignorePickupUntil = 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                Object.keys(this.activePowerUps).forEach((key, index) => {
+                     const powerUp = POWERUP_TYPES.find(p => p.name === key);
+                     if (powerUp) {
+                         ctx.strokeStyle = powerUp.color;
+                         ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, this.size / 2 + 4 + index * 3, 0, Math.PI * 2); ctx.stroke();
+                     }
+                });
+
+                if (this.activePowerUps['Shield']) {
+                    ctx.fillStyle = 'rgba(165, 180, 252, 0.3)';
+                    ctx.beginPath(); ctx.arc(0, 0, this.size / 2 + 6, 0, Math.PI * 2); ctx.fill();
+                }
+
+                ctx.fillStyle = '#4299e1';
+                ctx.beginPath(); ctx.arc(0, 0, this.size / 2, 0, Math.PI * 2); ctx.fill();
+                
+                // Draw Weapon
+                if (this.isMeleeAttacking && WEAPONS[this.currentMelee].name !== 'Chainsaw') {
+                    const melee = WEAPONS[this.currentMelee];
+                    const animDuration = (melee.cooldown * this.buffs.meleeCooldownMultiplier) * 0.5;
+                    const elapsedTime = Date.now() - this.meleeAnimStartTime;
+                    const animProgress = Math.min(elapsedTime / animDuration, 1);
+                    const swingArc = (melee.name === 'Katana' || melee.name === 'Sledgehammer' || melee.name === 'Fire Axe') ? Math.PI : Math.PI / 1.5;
+                    const swingAngle = Math.sin(animProgress * Math.PI) * swingArc - (swingArc / 2);
+                    ctx.save(); ctx.rotate(swingAngle);
+                    drawMeleeModel(melee);
+                    ctx.restore();
+                } else if (mouse.meleeDown && WEAPONS[this.currentMelee].name === 'Chainsaw') {
+                    ctx.save();
+                    const shake = Math.sin(Date.now() / 20) * 0.1;
+                    ctx.rotate(shake);
+                    drawMeleeModel(WEAPONS.chainsaw);
+                    ctx.restore();
+                } else {
+                    ctx.save(); ctx.translate(-this.recoilAmount, 0);
+                    drawGunModel(WEAPONS[this.currentGun]);
+                    ctx.restore();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                this.speed = this.baseSpeed * this.buffs.speedMultiplier;
+                this.maxHealth = PLAYER_HEALTH + this.buffs.maxHealthBonus;
+
+                if (keys['w'] || keys['ArrowUp']) this.y -= this.speed;
+                if (keys['s'] || keys['ArrowDown']) this.y += this.speed;
+                if (keys['a'] || keys['ArrowLeft']) this.x -= this.speed;
+                if (keys['d'] || keys['ArrowRight']) this.x += this.speed;
+                
+                this.x += this.knockbackVx; this.y += this.knockbackVy;
+                this.knockbackVx *= 0.9; this.knockbackVy *= 0.9;
+                this.recoilAmount *= 0.8;
+
+                if (this.isMeleeAttacking && WEAPONS[this.currentMelee].name !== 'Chainsaw') {
+                    const animDuration = (WEAPONS[this.currentMelee].cooldown * this.buffs.meleeCooldownMultiplier) * 0.5;
+                    if (Date.now() - this.meleeAnimStartTime > animDuration) {
+                        this.isMeleeAttacking = false;
+                    }
+                }
+                
+                const worldMouseX = mouse.x + camera.x;
+                const worldMouseY = mouse.y + camera.y;
+                const dx = worldMouseX - this.x;
+                const dy = worldMouseY - this.y;
+                this.angle = Math.atan2(dy, dx);
+            }
+
+            takeDamage(amount, attacker) {
+                if (this.activePowerUps['Shield']) return;
+                const now = Date.now();
+                if (now - this.lastHitTime < DAMAGE_INVINCIBILITY) return;
+                this.lastHitTime = now;
+
+                this.health -= amount;
+                lastDamageTime = now;
+                createParticles(this.x, this.y, 5, '#ef4444');
+
+                if (attacker) {
+                    const knockbackStrength = 8;
+                    const dx = this.x - attacker.x; const dy = this.y - attacker.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 0) {
+                        this.knockbackVx += (dx / dist) * knockbackStrength;
+                        this.knockbackVy += (dy / dist) * knockbackStrength;
+                    }
+                }
+                if (this.health <= 0) { this.health = 0; gameOver(); }
+            }
+        }
+        
+        function drawGunModel(gun) {
+            const s = player.size / 2;
+            if (gun.name === 'Pistol') { ctx.fillStyle = '#2d3748'; ctx.fillRect(s - 5, -2, 15, 4); }
+            else if (gun.name === 'Assault Rifle') { ctx.fillStyle = '#2d3748'; ctx.fillRect(s - 5, -3, 25, 6); ctx.fillRect(s, 3, 5, 8); }
+            else if (gun.name === 'Shotgun') { ctx.fillStyle = '#713f12'; ctx.fillRect(s - 5, -4, 28, 8); }
+            else if (gun.name === 'Flamethrower') { ctx.fillStyle = '#ef4444'; ctx.fillRect(s - 5, -4, 20, 8); ctx.fillStyle = '#fef08a'; ctx.fillRect(s - 10, -2, 5, 4); }
+            else if (gun.name === 'Railgun') { ctx.fillStyle = '#1e3a8a'; ctx.fillRect(s - 5, -2.5, 35, 5); }
+            else if (gun.name === 'Minigun') { ctx.fillStyle = '#4a5568'; ctx.fillRect(s, -5, 30, 10); ctx.fillRect(s - 10, -3, 10, 6); }
+            else if (gun.name === 'Grenade Launcher') { ctx.fillStyle = '#2f855a'; ctx.fillRect(s, -4, 25, 8); ctx.beginPath(); ctx.arc(s, 0, 8, 0, Math.PI*2); ctx.fill(); }
+        }
+
+        function drawMeleeModel(melee) {
+            const s = player.size / 2;
+            if (melee.name === 'Knife') { ctx.fillStyle = '#a0aec0'; ctx.beginPath(); ctx.moveTo(s, -2); ctx.lineTo(s + 20, 0); ctx.lineTo(s, 2); ctx.closePath(); ctx.fill(); }
+            else if (melee.name === 'Baseball Bat') { ctx.fillStyle = '#c05621'; ctx.beginPath(); ctx.moveTo(s, -3); ctx.lineTo(s + 35, -1); ctx.lineTo(s + 30, 1); ctx.lineTo(s, 3); ctx.closePath(); ctx.fill(); }
+            else if (melee.name === 'Katana') { ctx.fillStyle = '#e2e8f0'; ctx.beginPath(); ctx.moveTo(s, -1.5); ctx.lineTo(s + 45, 0); ctx.lineTo(s, 1.5); ctx.closePath(); ctx.fill(); }
+            else if (melee.name === 'Sledgehammer') { ctx.fillStyle = '#718096'; ctx.fillRect(s, -8, 20, 16); ctx.fillStyle = '#713f12'; ctx.fillRect(s - 20, -2, 20, 4); }
+            else if (melee.name === 'Fire Axe') { ctx.fillStyle = '#e53e3e'; ctx.beginPath(); ctx.moveTo(s+10, -15); ctx.lineTo(s+25, -10); ctx.lineTo(s+25, 10); ctx.lineTo(s+10, 15); ctx.arc(s+10, 0, 15, Math.PI/2, -Math.PI/2, false); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#713f12'; ctx.fillRect(s - 25, -2, 35, 4); }
+            else if (melee.name === 'Chainsaw') { ctx.fillStyle = '#f6e05e'; ctx.fillRect(s, -5, 40, 10); ctx.fillStyle = '#718096'; ctx.fillRect(s - 15, -8, 15, 16); }
+        }
+
+        class Zombie {
+            constructor(x, y, speed, health, isFast = false) {
+                this.x = x; this.y = y; this.size = ZOMBIE_SIZE;
+                this.baseSpeed = speed; this.speed = speed;
+                this.health = health; this.maxHealth = health;
+                this.knockbackVx = 0; this.knockbackVy = 0;
+                this.isOnFire = false; this.fireStartTime = 0;
+                this.lastFireDamageTime = 0; this.isFrozen = false;
+                this.isFast = isFast;
+            }
+
+            draw() {
+                ctx.fillStyle = this.isFrozen ? '#a5f3fc' : (this.isFast ? '#f59e0b' : '#48bb78');
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2); ctx.fill();
+                if (this.health < this.maxHealth) {
+                    const barWidth = this.size; const barHeight = 4;
+                    const healthPercent = this.health / this.maxHealth;
+                    ctx.fillStyle = '#718096';
+                    ctx.fillRect(this.x - barWidth / 2, this.y - this.size / 2 - 10, barWidth, barHeight);
+                    ctx.fillStyle = '#f56565';
+                    ctx.fillRect(this.x - barWidth / 2, this.y - this.size / 2 - 10, barWidth * healthPercent, barHeight);
+                }
+            }
+
+            update() {
+                this.x += this.knockbackVx; this.y += this.knockbackVy;
+                this.knockbackVx *= 0.9; this.knockbackVy *= 0.9;
+
+                if (!this.isFrozen) {
+                    const dx = player.x - this.x; const dy = player.y - this.y;
+                    const angle = Math.atan2(dy, dx);
+                    this.x += Math.cos(angle) * this.speed;
+                    this.y += Math.sin(angle) * this.speed;
+                }
+
+                if (this.isOnFire) {
+                    const now = Date.now();
+                    if (now - this.fireStartTime > FIRE_DURATION) {
+                        this.isOnFire = false;
+                    } else {
+                        if (now - this.lastFireDamageTime > FIRE_TICK_RATE) {
+                            const damage = (player.activePowerUps['Insta-Kill'] ? 10000 : FIRE_DAMAGE) * player.buffs.damageMultiplier;
+                            this.health -= damage;
+                            this.lastFireDamageTime = now;
+                            particles.push(new Particle(this.x + getRandom(-5, 5), this.y + getRandom(-5, 5), '#f97316', { x: 0, y: -0.5 }, getRandom(2, 5), 0.5));
+                        }
+                    }
+                }
+                this.draw();
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, angle, damage, options = {}) {
+                this.x = x; this.y = y; this.angle = angle; this.size = 4; this.damage = damage;
+                this.piercing = options.piercing || false;
+                this.pierceCount = options.pierceCount || 1;
+                this.isGrenade = options.isGrenade || false;
+                this.grenadeFuse = 1000;
+                this.spawnTime = Date.now();
+                this.lifetime = 2000;
+                this.hitZombies = [];
+            }
+            draw() {
+                if (this.isGrenade) {
+                    ctx.fillStyle = '#556b2f'; // Dark Olive Green
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2); ctx.fill();
+                } else {
+                    ctx.fillStyle = this.piercing ? '#60a5fa' : '#f6e05e';
+                    if (this.piercing) {
+                        ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+                        ctx.fillRect(-15, -2, 30, 4); ctx.restore();
+                    } else {
+                        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+                    }
+                }
+            }
+            update() {
+                const speed = (this.piercing || this.isGrenade) ? BULLET_SPEED * 1.5 : BULLET_SPEED;
+                this.x += Math.cos(this.angle) * speed;
+                this.y += Math.sin(this.angle) * speed;
+                this.draw();
+            }
+        }
+        
+        class Particle {
+            constructor(x, y, color, velocity, size = getRandom(2, 4), life = 1) {
+                this.x = x; this.y = y; this.color = color; this.velocity = velocity;
+                this.size = size; this.alpha = life;
+            }
+            draw() {
+                ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+            update() {
+                this.x += this.velocity.x; this.y += this.velocity.y;
+                this.alpha -= 0.02;
+                this.draw();
+            }
+        }
+        
+        class Explosion {
+            constructor(x, y, radius, damage) {
+                this.x = x; this.y = y; this.radius = radius; this.damage = damage;
+                this.maxRadius = radius; this.currentRadius = 0; this.alpha = 1;
+                
+                zombies.forEach(zombie => {
+                    if (getDistance(this.x, this.y, zombie.x, zombie.y) < this.radius + zombie.size / 2) {
+                        zombie.health -= this.damage;
+                    }
+                });
+            }
+            draw() {
+                 ctx.save(); ctx.globalAlpha = this.alpha;
+                 ctx.fillStyle = `rgba(251, 191, 36, ${this.alpha * 0.8})`; // amber-400
+                 ctx.beginPath(); ctx.arc(this.x, this.y, this.currentRadius, 0, Math.PI * 2); ctx.fill();
+                 ctx.restore();
+            }
+            update() {
+                this.currentRadius = this.maxRadius * (1 - this.alpha);
+                this.alpha -= 0.04;
+                this.draw();
+            }
+        }
+
+        class Pickup {
+            constructor(x, y, type, data) {
+                this.x = x; this.y = y; this.type = type; this.data = data; this.size = 18;
+                this.key = data.name ? data.name.toLowerCase().replace(/ /g, '_') : null;
+            }
+            draw() {
+                ctx.fillStyle = this.data.color || '#f6e05e';
+                if (this.type === 'weapon') {
+                    ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+                } else {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.fillStyle = '#1a202c';
+                ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                let symbol = '?';
+                if (this.type === 'ammo') symbol = 'A';
+                else if (this.type === 'powerup') symbol = this.data.symbol;
+                else if (this.type === 'weapon') {
+                    if (this.data.name === 'Assault Rifle') symbol = 'AR';
+                    else if (this.data.name === 'Shotgun') symbol = 'SG';
+                    else if (this.data.name === 'Flamethrower') symbol = 'FT';
+                    else if (this.data.name === 'Railgun') symbol = 'RG';
+                    else if (this.data.name === 'Katana') symbol = 'K';
+                    else if (this.data.name === 'Sledgehammer') symbol = 'SH';
+                    else if (this.data.name === 'Minigun') symbol = 'MG';
+                    else if (this.data.name === 'Grenade Launcher') symbol = 'GL';
+                    else if (this.data.name === 'Fire Axe') symbol = 'AX';
+                    else if (this.data.name === 'Chainsaw') symbol = 'CS';
+                    else symbol = 'B';
+                }
+                ctx.fillText(symbol, this.x, this.y);
+            }
+        }
+
+        // --- Game Logic Functions ---
+        function init() {
+            resizeCanvas();
+            isGameOver = false; score = 0; wave = 0;
+            zombieDamage = 1.8; lastDamageTime = 0; isPaused = false;
+            player = new Player(0, 0); // Start at world origin
+            zombies = []; bullets = []; particles = []; pickups = []; explosions = [];
+            updateUI();
+            modalContainer.classList.add('hidden');
+            hud.classList.remove('hidden');
+            spawnWave();
+        }
+
+        function spawnWave() {
+            wave++;
+            zombieDamage += 0.2;
+            updateUI();
+
+            const numZombies = 5 + wave * 2;
+            const baseZombieSpeed = 0.7;
+            const baseZombieHealth = 80 + wave * 10;
+            const fastZombieChance = Math.min(0.5, 0.1 + wave * 0.01);
+            
+            const spawnRadius = Math.max(canvas.width / 2, canvas.height / 2) + 50;
+
+            for (let i = 0; i < numZombies; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const x = player.x + Math.cos(angle) * spawnRadius;
+                const y = player.y + Math.sin(angle) * spawnRadius;
+
+                let speed = baseZombieSpeed;
+                let health = baseZombieHealth;
+                let isFast = false;
+                if (Math.random() < fastZombieChance) {
+                    speed *= 2;
+                    health /= 2;
+                    isFast = true;
+                }
+                zombies.push(new Zombie(x, y, speed, health, isFast));
+            }
+
+            // Weapon spawn logic
+            const weaponsToSpawn = [
+                { wave: 3, key: 'baseball_bat' }, { wave: 5, key: 'assault_rifle' },
+                { wave: 7, key: 'shotgun' }, { wave: 10, key: 'flamethrower' },
+                { wave: 12, key: 'katana' }, { wave: 15, key: 'railgun' },
+                { wave: 18, key: 'sledgehammer' }, { wave: 20, key: 'grenade_launcher' },
+                { wave: 22, key: 'fire_axe' }, { wave: 25, key: 'minigun' },
+                { wave: 28, key: 'chainsaw' }
+            ];
+
+            weaponsToSpawn.forEach(w => {
+                const weaponData = WEAPONS[w.key];
+                const inventory = weaponData.type === 'gun' ? player.gunInventory : player.meleeInventory;
+                if (wave === w.wave && !inventory.includes(w.key)) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spawnDist = 200;
+                    const x = player.x + Math.cos(angle) * spawnDist;
+                    const y = player.y + Math.sin(angle) * spawnDist;
+                    pickups.push(new Pickup(x, y, 'weapon', weaponData));
+                }
+            });
+        }
+        
+        function createParticles(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = getRandom(1, 4);
+                particles.push(new Particle(x, y, color, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }));
+            }
+        }
+        
+        function drawBackground() {
+            const gridSize = 40;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+
+            const startX = -camera.x % gridSize;
+            const startY = -camera.y % gridSize;
+
+            for (let x = startX; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = startY; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        function updateUI() {
+            if (!player) return;
+            healthBar.style.width = `${(player.health / player.maxHealth) * 100}%`;
+            healthText.textContent = `${Math.ceil(player.health)} / ${player.maxHealth}`;
+            waveText.textContent = wave; scoreText.textContent = score;
+            ammoText.textContent = player.currentGun === 'chainsaw' ? '---' : player.ammo;
+            
+            gunList.innerHTML = '';
+            player.gunInventory.forEach(gunKey => {
+                const gun = WEAPONS[gunKey];
+                const span = document.createElement('span');
+                span.textContent = gun.name;
+                if (gunKey === player.currentGun) span.className = 'selected-weapon';
+                gunList.appendChild(span);
+            });
+
+            meleeList.innerHTML = '';
+            player.meleeInventory.forEach(meleeKey => {
+                const melee = WEAPONS[meleeKey];
+                const span = document.createElement('span');
+                span.textContent = melee.name;
+                if (meleeKey === player.currentMelee) span.className = 'selected-weapon';
+                meleeList.appendChild(span);
+            });
+        }
+        
+        function shoot() {
+            const now = Date.now();
+            const weapon = WEAPONS[player.currentGun];
+            let currentCooldown = weapon.cooldown * player.buffs.cooldownMultiplier;
+            if (player.activePowerUps['Rapid Fire']) currentCooldown /= 2;
+
+            if (player.ammo > 0 && now - lastShotTime > currentCooldown) {
+                lastShotTime = now;
+                let damage = (player.activePowerUps['Insta-Kill'] ? 10000 : weapon.damage) * player.buffs.damageMultiplier;
+
+                if (weapon.name !== 'Flamethrower' && weapon.name !== 'Minigun' && weapon.name !== 'Assault Rifle') {
+                    player.ammo--;
+                }
+
+                if (weapon.name === 'Shotgun') {
+                    for (let i = 0; i < weapon.pellets; i++) {
+                        const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+                        bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {pierceCount: player.buffs.piercingBonus}));
+                    }
+                } else if (weapon.name === 'Grenade Launcher') {
+                    const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+                    bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {isGrenade: true}));
+                }
+                else if (weapon.name !== 'Flamethrower'){
+                    const bulletAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+                    const pierceCount = weapon.piercing ? 1000 : player.buffs.piercingBonus;
+                    bullets.push(new Bullet(player.x, player.y, bulletAngle, damage, {piercing: weapon.piercing, pierceCount: pierceCount}));
+                }
+                
+                player.recoilAmount = 5;
+                const barrelOffsetX = Math.cos(player.angle) * (player.size / 2 + 10);
+                const barrelOffsetY = Math.sin(player.angle) * (player.size / 2 + 10);
+                const flash = new Particle(player.x + barrelOffsetX, player.y + barrelOffsetY, '#fef08a', {x:0, y:0}, 8, 0.2);
+                flash.update = function() { this.alpha -= 0.05; this.draw(); };
+                particles.push(flash);
+                updateUI();
+            }
+            // Flamethrower continuous fire
+            if (weapon.name === 'Flamethrower' && player.ammo > 0) {
+                 const flameAngle = player.angle + (Math.random() - 0.5) * weapon.spread;
+                 const flameSpeed = getRandom(4, 6);
+                 const flameVelocity = { x: Math.cos(flameAngle) * flameSpeed, y: Math.sin(flameAngle) * flameSpeed };
+                 const flame = new Particle(player.x, player.y, '#f97316', flameVelocity, getRandom(5, 10), 0.5);
+                 flame.type = 'flame';
+                 particles.push(flame);
+            }
+        }
+
+        function meleeAttack() {
+            const now = Date.now();
+            const weapon = WEAPONS[player.currentMelee];
+            
+            if (weapon.name === 'Chainsaw') {
+                 if (now - lastChainsawDmgTime < weapon.cooldown) return;
+                 lastChainsawDmgTime = now;
+                 const damage = (player.activePowerUps['Insta-Kill'] ? 10000 : weapon.damage) * player.buffs.damageMultiplier;
+                 zombies.forEach(zombie => {
+                    const dist = getDistance(player.x, player.y, zombie.x, zombie.y);
+                    if (dist < weapon.range + zombie.size / 2) {
+                        const angleToZombie = Math.atan2(zombie.y - player.y, zombie.x - player.x);
+                        let angleDiff = Math.abs(player.angle - angleToZombie);
+                        if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+                        if (angleDiff < Math.PI / 4) { // Narrower cone for chainsaw
+                            const wasAlive = zombie.health > 0;
+                            zombie.health -= damage;
+                            if (wasAlive && zombie.health <= 0) {
+                                player.ammo += player.buffs.ammoOnMeleeKill;
+                                updateUI();
+                            }
+                            const dx = zombie.x - player.x; const dy = zombie.y - player.y;
+                            const d = Math.sqrt(dx*dx + dy*dy);
+                            if (d > 0) {
+                                zombie.knockbackVx += (dx/d) * weapon.knockback;
+                                zombie.knockbackVy += (dy/d) * weapon.knockback;
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (now - lastMeleeTime < (weapon.cooldown * player.buffs.meleeCooldownMultiplier)) return;
+            lastMeleeTime = now;
+            
+            const damage = (player.activePowerUps['Insta-Kill'] ? 10000 : weapon.damage) * player.buffs.damageMultiplier;
+
+            zombies.forEach(zombie => {
+                const dist = getDistance(player.x, player.y, zombie.x, zombie.y);
+                if (dist < weapon.range + zombie.size / 2) {
+                    const angleToZombie = Math.atan2(zombie.y - player.y, zombie.x - player.x);
+                    let angleDiff = Math.abs(player.angle - angleToZombie);
+                    if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+                    if (angleDiff < Math.PI / 2) {
+                        const wasAlive = zombie.health > 0;
+                        zombie.health -= damage;
+                        if (wasAlive && zombie.health <= 0) {
+                            player.ammo += player.buffs.ammoOnMeleeKill;
+                            updateUI();
+                        }
+                        if (weapon.knockback > 0) {
+                            const dx = zombie.x - player.x; const dy = zombie.y - player.y;
+                            const d = Math.sqrt(dx*dx + dy*dy);
+                            if (d > 0) {
+                                zombie.knockbackVx += (dx/d) * weapon.knockback;
+                                zombie.knockbackVy += (dy/d) * weapon.knockback;
+                            }
+                        }
+                        createParticles(zombie.x, zombie.y, 3, '#a0aec0');
+                    }
+                }
+            });
+
+            player.isMeleeAttacking = true;
+            player.meleeAnimStartTime = now;
+
+            const visualizer = {
+                x: player.x, y: player.y, angle: player.angle, radius: weapon.range, alpha: 1,
+                draw: function() {
+                    ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.alpha})`; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(0, 0, this.radius, -Math.PI / 4, Math.PI / 4); ctx.stroke();
+                    ctx.restore();
+                },
+                update: function() { this.alpha -= 0.08; this.draw(); }
+            };
+            particles.push(visualizer);
+        }
+
+        function activatePowerUp(powerUp, customDuration = null) {
+            const duration = customDuration !== null ? customDuration : powerUp.data.duration;
+            const name = powerUp.data.name;
+            
+            if (name === 'Health Pack') {
+                player.health = Math.min(player.maxHealth, player.health + 25);
+                updateUI();
+                return;
+            }
+            if (name === 'Nuke') {
+                zombies.forEach(zombie => {
+                    createParticles(zombie.x, zombie.y, 25, '#4ade80');
+                    score += 50;
+                });
+                zombies = [];
+                updateUI();
+                return;
+            }
+            if (name === 'Freeze') {
+                zombies.forEach(z => z.isFrozen = true);
+                setTimeout(() => { zombies.forEach(z => z.isFrozen = false); }, duration);
+                return;
+            }
+            
+            // For timed powerups
+            player.activePowerUps[name] = true;
+            setTimeout(() => { delete player.activePowerUps[name]; }, duration);
+        }
+
+        function gameOver() {
+            if (isGameOver) return;
+            isGameOver = true;
+            cancelAnimationFrame(gameLoopId);
+            finalWave.textContent = wave;
+            finalScore.textContent = score;
+            modalContainer.classList.remove('hidden');
+            gameOverScreen.classList.remove('hidden');
+            startScreen.classList.add('hidden');
+            hud.classList.add('hidden');
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop() {
+            gameLoopId = requestAnimationFrame(gameLoop);
+            if (isPaused || isGameOver) return;
+
+            const now = Date.now();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update camera to follow player
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+
+            drawBackground();
+
+            // Translate context to camera position
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            if (mouse.down) {
+                if (player.currentGun === 'flamethrower' && player.ammo > 0) {
+                    if (now - lastFlamethrowerAmmoUse > 500) {
+                        player.ammo--;
+                        lastFlamethrowerAmmoUse = now;
+                        updateUI();
+                    }
+                } else if (player.currentGun === 'minigun' && player.ammo > 0) {
+                    if (now - lastMinigunAmmoUse > 250) { // 4 ammo/sec
+                        player.ammo--;
+                        lastMinigunAmmoUse = now;
+                        updateUI();
+                    }
+                } else if (player.currentGun === 'assault_rifle' && player.ammo > 0) {
+                    if (now - lastAssaultRifleAmmoUse > 500) { // 2 ammo/sec
+                        player.ammo--;
+                        lastAssaultRifleAmmoUse = now;
+                        updateUI();
+                    }
+                }
+                shoot();
+            }
+
+            if (mouse.meleeDown) meleeAttack();
+
+            if (now - lastDamageTime > REGEN_DELAY && player.health < player.maxHealth) {
+                if (now - lastRegenTime > REGEN_RATE) {
+                    player.health = Math.min(player.maxHealth, player.health + player.buffs.regenAmount);
+                    lastRegenTime = now; 
+                    updateUI();
+                }
+            }
+
+            pickups.forEach((pickup, index) => {
+                if (pickup === player.ignoredPickup && Date.now() < player.ignorePickupUntil) {
+                    return; 
+                }
+                pickup.draw();
+                if (getDistance(player.x, player.y, pickup.x, pickup.y) < player.size / 2 + pickup.size / 2) {
+                    if (pickup.type === 'ammo') { player.ammo += (player.currentGun === 'flamethrower' || player.currentGun === 'minigun' || player.currentGun === 'chainsaw') ? 50 : 10; }
+                    else if (pickup.type === 'powerup') activatePowerUp(pickup);
+                    else if (pickup.type === 'weapon') {
+                        const weaponData = pickup.data;
+                        const inventory = weaponData.type === 'gun' ? player.gunInventory : player.meleeInventory;
+                        const max = weaponData.type === 'gun' ? maxGunInventory : maxMeleeInventory;
+                        if (inventory.length >= max && !inventory.includes(pickup.key)) {
+                            startWeaponSwap(pickup);
+                        } else if (!inventory.includes(pickup.key)) {
+                            inventory.push(pickup.key);
+                        }
+                    }
+                    if (pickup.type !== 'weapon' || (pickup.type === 'weapon' && ((pickup.data.type === 'gun' ? player.gunInventory.length : player.meleeInventory.length) < (pickup.data.type === 'gun' ? maxGunInventory : maxMeleeInventory) || player.gunInventory.includes(pickup.key) || player.meleeInventory.includes(pickup.key) ) ) ) {
+                       pickups.splice(index, 1);
+                    }
+                    updateUI();
+                }
+            });
+
+            player.update();
+            player.draw();
+
+            explosions.forEach((exp, index) => {
+                if (exp.alpha <= 0) explosions.splice(index, 1);
+                else exp.update();
+            });
+            particles.forEach((p, index) => {
+                if (p.alpha <= 0) particles.splice(index, 1);
+                else p.update();
+            });
+
+            bullets.forEach((bullet, bIndex) => {
+                bullet.update();
+                if (now - bullet.spawnTime > bullet.lifetime || (bullet.isGrenade && now - bullet.spawnTime > bullet.grenadeFuse)) {
+                    if (bullet.isGrenade) {
+                        explosions.push(new Explosion(bullet.x, bullet.y, 80, bullet.damage));
+                    }
+                    bullets.splice(bIndex, 1);
+                }
+            });
+
+            zombies.forEach((zombie, zIndex) => {
+                zombie.update();
+
+                for (let i = zIndex + 1; i < zombies.length; i++) {
+                    const otherZombie = zombies[i];
+                    const dist = getDistance(zombie.x, zombie.y, otherZombie.x, otherZombie.y);
+                    const minDist = zombie.size / 2 + otherZombie.size / 2;
+                    if (dist < minDist) {
+                        const overlap = minDist - dist; const dx = zombie.x - otherZombie.x; const dy = zombie.y - otherZombie.y;
+                        const angle = Math.atan2(dy, dx); const moveX = (overlap / 2) * Math.cos(angle); const moveY = (overlap / 2) * Math.sin(angle);
+                        zombie.x += moveX; zombie.y += moveY; otherZombie.x -= moveX; otherZombie.y -= moveY;
+                    }
+                }
+
+                if (getDistance(player.x, player.y, zombie.x, zombie.y) < player.size / 2 + zombie.size / 2) {
+                    player.takeDamage(zombieDamage, zombie); updateUI();
+                }
+
+                bullets.forEach((bullet, bIndex) => {
+                    if (getDistance(bullet.x, bullet.y, zombie.x, zombie.y) < bullet.size / 2 + zombie.size / 2) {
+                        if (bullet.isGrenade) {
+                            explosions.push(new Explosion(bullet.x, bullet.y, 80, bullet.damage));
+                            bullets.splice(bIndex, 1);
+                        } else if (!bullet.hitZombies.includes(zombie)) {
+                             zombie.health -= bullet.damage;
+                             bullet.hitZombies.push(zombie);
+                             if (bullet.hitZombies.length >= bullet.pierceCount) {
+                                bullets.splice(bIndex, 1);
+                             }
+                             createParticles(zombie.x, zombie.y, 5, '#48bb78');
+                        }
+                    }
+                });
+                
+                particles.forEach(p => {
+                    if (p.type === 'flame' && getDistance(p.x, p.y, zombie.x, zombie.y) < p.size + zombie.size / 2) {
+                        zombie.isOnFire = true; zombie.fireStartTime = now; p.alpha = 0;
+                    }
+                });
+
+                if (zombie.health <= 0) {
+                    createParticles(zombie.x, zombie.y, 15, '#48bb78');
+                    zombies.splice(zIndex, 1);
+                    score += 100;
+                    
+                    const dropRoll = Math.random() + player.buffs.luck;
+                    if (dropRoll < 0.05 + player.buffs.luck) {
+                        const rarePowerUps = POWERUP_TYPES.filter(p => p.name === 'Nuke' || p.name === 'Insta-Kill');
+                        pickups.push(new Pickup(zombie.x, zombie.y, 'powerup', rarePowerUps[Math.floor(Math.random() * rarePowerUps.length)]));
+                    } else if (dropRoll < 0.15 + player.buffs.luck) {
+                        const commonPowerUps = POWERUP_TYPES.filter(p => p.name !== 'Nuke' && p.name !== 'Insta-Kill');
+                        pickups.push(new Pickup(zombie.x, zombie.y, 'powerup', commonPowerUps[Math.floor(Math.random() * commonPowerUps.length)]));
+                    } else if (dropRoll < 0.40 + player.buffs.luck) {
+                        pickups.push(new Pickup(zombie.x, zombie.y, 'ammo', {}));
+                    }
+                    updateUI();
+                }
+            });
+            
+            ctx.restore(); // Restore context from camera translation
+
+            if (zombies.length === 0 && !isGameOver) {
+                startWaveCompleteSequence();
+            }
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('resize', resizeCanvas);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                 if (!debugMenu.classList.contains('hidden')) toggleDebugMenu();
+                 if (debugPromptContainer.style.display === 'flex') { debugPromptContainer.style.display = 'none'; isPaused = false; }
+                 if (!startScreen.classList.contains('hidden') && startButton.classList.contains('hidden')) togglePause(false);
+                 if (!weaponSwapContainer.classList.contains('hidden')) endWeaponSwap(false);
+            }
+            if (isPaused) return;
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ') { e.preventDefault(); mouse.meleeDown = true; }
+            if (e.key === '1') {
+                const currentIndex = player.gunInventory.indexOf(player.currentGun);
+                player.currentGun = player.gunInventory[(currentIndex + 1) % player.gunInventory.length];
+                updateUI();
+            }
+            if (e.key === '2') {
+                const currentIndex = player.meleeInventory.indexOf(player.currentMelee);
+                player.currentMelee = player.meleeInventory[(currentIndex + 1) % player.meleeInventory.length];
+                updateUI();
+            }
+        });
+        document.addEventListener('keyup', (e) => { 
+            keys[e.key.toLowerCase()] = false;
+            if (e.key === ' ') mouse.meleeDown = false;
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
+        });
+        canvas.addEventListener('mousedown', (e) => { if (e.button === 0) mouse.down = true; });
+        canvas.addEventListener('mouseup', (e) => { if (e.button === 0) mouse.down = false; });
+        startButton.addEventListener('click', () => {
+            startScreen.classList.add('hidden'); modalContainer.classList.add('hidden');
+            init(); gameLoop();
+        });
+        restartButton.addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            init(); gameLoop();
+        });
+
+        // --- Debug & Pause Menu Logic ---
+        function togglePause() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                mouse.down = false;
+                mouse.meleeDown = false;
+                modalContainer.classList.remove('hidden'); startScreen.classList.remove('hidden');
+                gameOverScreen.classList.add('hidden'); screenTitle.textContent = "PAUSED";
+                screenSubtitle.textContent = "WASD: Move | Mouse: Aim | LMB: Shoot | Space: Melee | 1/2: Switch Weapons";
+                startButton.classList.add('hidden'); unpauseBtn.classList.remove('hidden'); restartRunBtn.classList.remove('hidden');
+            } else {
+                modalContainer.classList.add('hidden');
+            }
+        }
+
+        pauseButton.addEventListener('click', togglePause);
+        unpauseBtn.addEventListener('click', togglePause);
+        restartRunBtn.addEventListener('click', () => { togglePause(false); init(); });
+
+        function toggleDebugMenu() {
+            isPaused = !isPaused;
+            debugMenu.classList.toggle('hidden');
+            if (isPaused) {
+                mouse.down = false;
+                mouse.meleeDown = false;
+                populateDebugMenu();
+            }
+        }
+
+        function populateDebugMenu() {
+            if (!player) return;
+            document.getElementById('debugHealth').value = Math.ceil(player.health);
+            document.getElementById('debugAmmo').value = player.ammo;
+            document.getElementById('debugScore').value = score;
+            document.getElementById('debugWave').value = wave;
+            document.getElementById('debugMaxGuns').value = maxGunInventory;
+            document.getElementById('debugMaxMelee').value = maxMeleeInventory;
+
+            const weaponsContainer = document.getElementById('debugWeapons');
+            weaponsContainer.innerHTML = '';
+            Object.entries(WEAPONS).forEach(([key, weapon]) => {
+                const hasWeapon = (weapon.type === 'gun' && player.gunInventory.includes(key)) || (weapon.type === 'melee' && player.meleeInventory.includes(key));
+                const div = document.createElement('div'); div.className = 'flex items-center gap-2';
+                const name = document.createElement('span'); name.textContent = weapon.name; name.className = 'flex-grow';
+                div.appendChild(name);
+                const btn = document.createElement('button');
+                btn.className = hasWeapon ? 'remove-btn !p-1' : '!p-1';
+                btn.textContent = hasWeapon ? 'Remove' : 'Give';
+                btn.onclick = () => {
+                    if (hasWeapon) removeWeapon(key, weapon.type);
+                    else giveWeapon(key, weapon.type);
+                    populateDebugMenu();
+                };
+                div.appendChild(btn);
+                weaponsContainer.appendChild(div);
+            });
+
+            const powerupsContainer = document.getElementById('debugPowerups');
+            powerupsContainer.innerHTML = '';
+            POWERUP_TYPES.forEach(powerup => {
+                 if (powerup.name === 'Health Pack' || powerup.name === 'Nuke') return;
+                 const btn = document.createElement('button');
+                 btn.textContent = `Give ${powerup.name}`; btn.className = '!p-1';
+                 btn.onclick = () => {
+                    const duration = parseInt(document.getElementById('debugPowerupTime').value) * 1000;
+                    activatePowerUp({data: powerup}, duration);
+                 };
+                 powerupsContainer.appendChild(btn);
+            });
+
+            const upgradesContainer = document.getElementById('debugUpgrades');
+            upgradesContainer.innerHTML = '';
+            Object.values(PERMANENT_BUFFS).forEach(buff => {
+                const btn = document.createElement('button');
+                btn.textContent = buff.name; btn.className = '!p-1';
+                btn.onclick = () => { buff.apply(player); updateUI(); };
+                upgradesContainer.appendChild(btn);
+            });
+        }
+
+        function giveWeapon(key, type) {
+            const inventory = type === 'gun' ? player.gunInventory : player.meleeInventory;
+            if (!inventory.includes(key)) { inventory.push(key); updateUI(); }
+        }
+
+        function removeWeapon(key, type) {
+            if (type === 'gun') {
+                if (player.gunInventory.length <= 1) return;
+                player.gunInventory = player.gunInventory.filter(w => w !== key);
+                if (player.currentGun === key) player.currentGun = player.gunInventory[0];
+            } else {
+                if (player.meleeInventory.length <= 1) return;
+                player.meleeInventory = player.meleeInventory.filter(w => w !== key);
+                if (player.currentMelee === key) player.currentMelee = player.meleeInventory[0];
+            }
+            updateUI();
+        }
+
+        debugButton.addEventListener('click', () => {
+            if (debugUnlocked) { toggleDebugMenu(); } 
+            else { 
+                isPaused = true; 
+                mouse.down = false;
+                mouse.meleeDown = false;
+                debugPromptContainer.style.display = 'flex'; 
+                debugCodeInput.focus(); 
+            }
+        });
+        submitDebugCodeBtn.addEventListener('click', () => {
+            if (debugCodeInput.value === DEBUG_CODE) {
+                debugUnlocked = true;
+                debugPromptContainer.style.display = 'none';
+                debugMenu.classList.remove('hidden');
+                populateDebugMenu();
+            } else {
+                debugPromptContainer.style.display = 'none'; isPaused = false;
+            }
+            debugCodeInput.value = '';
+        });
+        debugCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitDebugCodeBtn.click(); });
+        document.getElementById('setStatsBtn').addEventListener('click', () => {
+            player.health = parseInt(document.getElementById('debugHealth').value) || player.health;
+            player.ammo = parseInt(document.getElementById('debugAmmo').value) || player.ammo;
+            score = parseInt(document.getElementById('debugScore').value) || score;
+            updateUI();
+        });
+        document.getElementById('setWaveBtn').addEventListener('click', () => {
+            const newWave = parseInt(document.getElementById('debugWave').value);
+            if (!isNaN(newWave) && newWave > 0) { wave = newWave - 1; zombies = []; spawnWave(); }
+        });
+        document.getElementById('restartWaveBtn').addEventListener('click', () => { wave--; zombies = []; spawnWave(); });
+        document.getElementById('setLimitsBtn').addEventListener('click', () => {
+            maxGunInventory = parseInt(document.getElementById('debugMaxGuns').value) || maxGunInventory;
+            maxMeleeInventory = parseInt(document.getElementById('debugMaxMelee').value) || maxMeleeInventory;
+        });
+
+        // --- Buff System Logic ---
+        function startWaveCompleteSequence() {
+            isPaused = true; 
+            mouse.down = false;
+            mouse.meleeDown = false;
+            waveCompleteContainer.style.display = 'flex';
+            const availableBuffs = Object.keys(PERMANENT_BUFFS); const chosenBuffs = [];
+            while(chosenBuffs.length < 3 && availableBuffs.length > 0) {
+                const randomIndex = Math.floor(Math.random() * availableBuffs.length);
+                chosenBuffs.push(availableBuffs.splice(randomIndex, 1)[0]);
+            }
+            buffSelection.innerHTML = '';
+            chosenBuffs.forEach(buffKey => {
+                const buff = PERMANENT_BUFFS[buffKey]; const card = document.createElement('button');
+                card.className = 'buff-card text-left p-4 w-48';
+                card.innerHTML = `<h3 class="font-bold text-lg">${buff.name}</h3> <p class="text-sm text-gray-300">${buff.description}</p>`;
+                card.onclick = () => selectBuff(buff);
+                buffSelection.appendChild(card);
+            });
+        }
+
+        function selectBuff(buff) {
+            buff.apply(player); waveCompleteContainer.style.display = 'none';
+            isPaused = false; spawnWave();
+        }
+        
+        // --- Weapon Swap Logic ---
+        function startWeaponSwap(pickup) {
+            isPaused = true;
+            mouse.down = false;
+            mouse.meleeDown = false;
+            pendingWeaponPickup = pickup;
+            const newWeaponData = pickup.data;
+            const inventory = newWeaponData.type === 'gun' ? player.gunInventory : player.meleeInventory;
+            
+            weaponSwapContainer.style.display = 'flex';
+            
+            newWeaponCard.innerHTML = createWeaponCardHTML(newWeaponData, false);
+            newWeaponCard.className = 'weapon-card new-weapon-card text-left p-4 w-48 inline-block';
+
+            currentWeaponSelection.innerHTML = '';
+            inventory.forEach(weaponKey => {
+                const weaponData = WEAPONS[weaponKey];
+                const card = document.createElement('button');
+                card.className = 'weapon-card text-left p-4 w-48';
+                card.innerHTML = createWeaponCardHTML(weaponData, true);
+                card.onclick = () => {
+                    const newWeaponKey = pickup.key;
+                    replaceWeapon(weaponKey, newWeaponKey, newWeaponData.type);
+                    endWeaponSwap(true);
+                };
+                currentWeaponSelection.appendChild(card);
+            });
+        }
+        
+        function createWeaponCardHTML(weaponData, isCurrent) {
+            const dmg = `Dmg: ${weaponData.damage}`;
+            const cd = `Spd: ${weaponData.cooldown}`;
+            const title = isCurrent ? `Replace ${weaponData.name}` : weaponData.name;
+            return `<h3 class="font-bold text-lg">${title}</h3> <p class="text-sm text-gray-300">${dmg} | ${cd}</p>`;
+        }
+        
+        function replaceWeapon(oldKey, newKey, type) {
+            const inventory = type === 'gun' ? player.gunInventory : player.meleeInventory;
+            const index = inventory.indexOf(oldKey);
+            if (index !== -1) {
+                inventory[index] = newKey;
+                if (type === 'gun' && player.currentGun === oldKey) player.currentGun = newKey;
+                if (type === 'melee' && player.currentMelee === oldKey) player.currentMelee = newKey;
+            }
+        }
+        
+        function endWeaponSwap(wasSwapped) {
+            if (wasSwapped && pendingWeaponPickup) {
+                 const index = pickups.indexOf(pendingWeaponPickup);
+                 if (index > -1) pickups.splice(index, 1);
+            }
+            if (!wasSwapped && pendingWeaponPickup) {
+                player.ignoredPickup = pendingWeaponPickup;
+                player.ignorePickupUntil = Date.now() + 500;
+            }
+            pendingWeaponPickup = null;
+            weaponSwapContainer.style.display = 'none';
+            isPaused = false;
+            updateUI();
+        }
+        discardWeaponBtn.addEventListener('click', () => endWeaponSwap(false));
+
+        // --- Initial Setup ---
+        resizeCanvas();
+
+    </script>
+</body>
+</html>
+
